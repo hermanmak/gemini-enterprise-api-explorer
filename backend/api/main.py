@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI application
 app = FastAPI(
-    title="Gemini Enterprise API Explorer",
-    description="API for accessing Gemini Enterprise (Agentspace) and NotebookLM Enterprise functionality",
+    title="Gemini Enterprise Studio",
+    description="API for accessing Gemini Enterprise Studio (previously GenMedia Studio) and NotebookLM Enterprise functionality",
     version="1.0.0",
 )
 
@@ -63,7 +63,7 @@ async def root():
         Welcome message and API information
     """
     return {
-        "message": "Gemini Enterprise API Explorer",
+        "message": "Gemini Enterprise Studio",
         "version": "1.0.0",
         "endpoints": {
             "search": "/search",

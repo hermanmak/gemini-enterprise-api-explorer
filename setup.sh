@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Gemini Enterprise API Explorer - Setup Script
+# Gemini Enterprise Studio - Setup Script
 # This script sets up the development environment and starts the application
 
 set -e
@@ -13,19 +13,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Gemini Enterprise & NotebookLM API Explorer              ║${NC}"
+echo -e "${BLUE}║  Gemini Enterprise Studio                                 ║${NC}"
 echo -e "${BLUE}║              Setup & Start                                 ║${NC}"
-echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
-}
-
-# Function to get version
-get_version() {
-    $1 --version 2>&1 | head -n 1
 }
 
 # Check prerequisites
@@ -59,18 +54,13 @@ if ! command_exists npm; then
     exit 1
 fi
 
-NPM_VERSION=$(npm --version)
-echo -e "${GREEN}✓ npm ${NPM_VERSION} found${NC}"
-
 echo ""
-echo -e "${BLUE}🔧 Setting up backend...${NC}"
+echo -e "${BLUE}🔧 Setting up Python environment...${NC}"
 
 # Create Python virtual environment if it doesn't exist
-if [ ! -d "backend/.venv" ]; then
-    echo "  Creating Python virtual environment..."
-    cd backend
+if [ ! -d ".venv" ]; then
+    echo "  Creating Python virtual environment in .venv..."
     python3 -m venv .venv
-    cd ..
     echo -e "${GREEN}  ✓ Virtual environment created${NC}"
 else
     echo -e "${GREEN}  ✓ Virtual environment already exists${NC}"
@@ -78,11 +68,9 @@ fi
 
 # Activate virtual environment and install dependencies
 echo "  Installing Python dependencies..."
-cd backend
 source .venv/bin/activate
 pip install --upgrade pip > /dev/null 2>&1
 pip install -r requirements.txt > /dev/null 2>&1
-cd ..
 echo -e "${GREEN}  ✓ Python dependencies installed${NC}"
 
 echo ""
@@ -107,7 +95,7 @@ echo ""
 
 # Start backend in background
 echo -e "${BLUE}  Starting backend server...${NC}"
-source backend/.venv/bin/activate
+source .venv/bin/activate
 python -m backend.api.main > /dev/null 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}  ✓ Backend started (PID: $BACKEND_PID)${NC}"
@@ -146,7 +134,7 @@ sleep 3
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                    🎉 All Set!                             ║${NC}"
-echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${YELLOW}📱 Opening browser...${NC}"
 echo ""
@@ -170,11 +158,11 @@ echo ""
 echo -e "${BLUE}📝 Next Steps:${NC}"
 echo "  1. Configure your Google Cloud credentials in the sidebar:"
 echo "     • Project Number (your GCP project number)"
-echo "     • Engine ID (your Agentspace engine ID, if using Gemini features)"
-echo "     • Location (us, eu, or global)"
+│   "     • Engine ID (your Agentspace engine ID, if using Gemini features)"
+│   "     • Location (us, eu, or global)"
 echo ""
 echo "  2. Explore the features:"
-echo "     • 🤖 API Explorer - Test Gemini Enterprise endpoints"
+echo "     • 🤖 Gemini Enterprise Studio - Test endpoints"
 echo "     • 📓 NotebookLM - Create and manage notebooks with data sources"
 echo "     • 💬 Chat - Interactive chat interface"
 echo "     • 🔍 Search - Enterprise search functionality"

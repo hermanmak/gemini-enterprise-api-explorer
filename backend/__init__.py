@@ -1,3 +1,3 @@
 """
-Backend package for Gemini Enterprise API Explorer.
+Backend package for Gemini Enterprise Studio.
 """

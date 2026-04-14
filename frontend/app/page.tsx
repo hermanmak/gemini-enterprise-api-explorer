@@ -54,7 +54,7 @@ export default function Home() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              🔷 Gemini Enterprise Explorer
+              🔷 Gemini Enterprise API Explorer
             </button>
             <button
               onClick={() => setCurrentView('notebooks')}
@@ -64,7 +64,7 @@ export default function Home() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              📓 NotebookLM
+              📓 NotebookLM Enterprise API Explorer
             </button>
             <button
               onClick={() => setCurrentView('chat')}

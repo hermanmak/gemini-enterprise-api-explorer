@@ -61,7 +61,7 @@ export default function ConfigSidebar({ config, onConfigChange }: ConfigSidebarP
   return (
     <div className="w-80 border-r border-gray-200 bg-gray-50 p-6 flex flex-col h-full">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Configuration</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Central Config Settings</h2>
         <div className="flex items-center gap-2 text-sm">
           {isConfigured ? (
             <>

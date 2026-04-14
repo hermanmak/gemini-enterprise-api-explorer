@@ -1,10 +1,10 @@
 # Architecture
 
-Technical architecture and development guide for the Gemini Enterprise API Explorer.
+Technical architecture and development guide for the Gemini Enterprise Studio.
 
 ## System Overview
 
-This is a full-stack application demonstrating API integration with Gemini Enterprise (Agentspace) and NotebookLM Enterprise.
+This is a full-stack application demonstrating API integration with Gemini Enterprise Studio (previously known as GenMedia Studio) and NotebookLM Enterprise.
 
 ### Tech Stack
 

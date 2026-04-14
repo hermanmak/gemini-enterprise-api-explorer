@@ -1,0 +1,45 @@
+{
+  "pages": [
+    {
+      "id": 0,
+      "display": "Home",
+      "icon": "home",
+      "route": "/home",
+      "description": "The home page of the application."
+    },
+    {
+      "id": 10,
+      "display": "Gemini Enterprise API Explorer",
+      "icon": "spark",
+      "route": "/gemini",
+      "group": "enterprise",
+      "description": "Enterprise Conversational Search and API testing with Gemini."
+    },
+    {
+      "id": 20,
+      "display": "NotebookLM Enterprise API Explorer",
+      "icon": "description",
+      "route": "/notebooklm",
+      "group": "enterprise",
+      "description": "Enterprise Notebook Management and Source Ingestion API."
+    },
+    {
+      "id": 95,
+      "display": "About",
+      "icon": "info",
+      "route": "/about",
+      "align": "bottom",
+      "group": "enterprise",
+      "description": "Information about the Gemini Enterprise Studio."
+    },
+    {
+      "id": 99,
+      "display": "Central Config Settings",
+      "icon": "settings",
+      "route": "/config",
+      "align": "bottom",
+      "group": "enterprise",
+      "description": "Configure project and location settings centrally."
+    }
+  ]
+}

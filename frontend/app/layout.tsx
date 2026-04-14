@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Gemini Enterprise API Explorer',
-  description: 'Explore and interact with Gemini Enterprise (Agentspace) APIs',
+  title: 'Gemini Enterprise Studio',
+  description: 'Explore and interact with Gemini Enterprise APIs',
 };
 
 export default function RootLayout({

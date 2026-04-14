@@ -1,5 +1,5 @@
 """
-API Explorer routes for testing Gemini Enterprise API endpoints.
+Gemini Enterprise Studio routes for testing Gemini Enterprise API endpoints.
 """
 
 import logging
