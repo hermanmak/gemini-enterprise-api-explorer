@@ -75,34 +75,92 @@ Substitute `PROJECT_NUMBER`, `LOCATION`, and `ENGINE_ID` with the values from [P
 
 ## Cross-Application Access (e.g. Embedding Gemini Enterprise Data in Another App)
 
-If a second application — say an internal portal called ARIA — is federated through the **same Microsoft Entra ID tenant** and needs to show a signed-in user's Gemini Enterprise data inline, the user should never see a second sign-in prompt. The recommended setup:
+If a second application — say an internal portal called ARIA — is federated through the **same Microsoft Entra ID tenant** and needs to query Gemini Enterprise on behalf of a signed-in user, the user should never see a second sign-in prompt.
 
-- Your administrator creates a **second Workforce Identity Federation provider in the same workforce pool** used for Gemini Enterprise, with `--client-id` set to the calling application's own Entra ID app registration, and the **same `--attribute-mapping`** as the existing provider (e.g. both map `google.subject` from the same Entra claim, such as `assertion.oid`). Same pool + same mapping means the same human resolves to the same Google principal (`principal://iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/subject/...`) no matter which application's provider they came through — so IAM access already granted for Gemini Enterprise applies automatically, with no separate consent step.
-- The calling application's backend then reuses the ID token it already holds from its own normal Entra ID sign-in and runs [Step 2](#step-2-exchange-it-for-a-google-cloud-access-token) exactly as above — just pointed at its own provider's resource name as the `audience`.
+### Architecture & ID Correlation
+
+Gemini Enterprise binds authentication at the **Workforce Pool level**, not the individual provider level (configured under *Gemini Enterprise > Settings > Authentication* as `locations/global/workforcePools/<WORKFORCE_POOL_ID>`).
+
+Because IAM permissions and data store access attach to the **workforce pool subject principal**:
+
+$$\text{principal://iam.googleapis.com/locations/global/workforcePools/}\mathbf{WORKFORCE\_POOL\_ID}\text{/subject/}\mathbf{SUBJECT\_VALUE}$$
+
+You can add a second OIDC provider to the **same workforce pool**. As long as both providers map `google.subject` to the same claim (e.g. `assertion.email.lowerAscii()` or `assertion.oid`), any authenticated user resolves to the **exact same principal**, retaining all Gemini Enterprise IAM access automatically.
+
+| Layer | Gemini Enterprise Primary / Web App | Calling Application (e.g. ARIA Portal) |
+| :--- | :--- | :--- |
+| **Entra ID App Registration** | `ENTRA_APP_CLIENT_ID_1` (e.g. Gemini Enterprise) | `ENTRA_APP_CLIENT_ID_2` (e.g. ARIA Portal) |
+| **Entra ID Issuer** | `https://login.microsoftonline.com/<TENANT_ID>/v2.0` | `https://login.microsoftonline.com/<TENANT_ID>/v2.0` *(Same)* |
+| **Workforce Identity Pool** | `locations/global/workforcePools/WORKFORCE_POOL_ID` | `locations/global/workforcePools/WORKFORCE_POOL_ID` *(Same)* |
+| **Workforce Identity Provider** | `providers/WORKFORCE_PROVIDER_ID_1` | `providers/WORKFORCE_PROVIDER_ID_2` |
+| **Attribute Mapping** | `google.subject=assertion.email.lowerAscii()` | `google.subject=assertion.email.lowerAscii()` *(Must match)* |
+| **Resolved IAM Principal** | `principal://.../workforcePools/WORKFORCE_POOL_ID/subject/user@example.com` | `principal://.../workforcePools/WORKFORCE_POOL_ID/subject/user@example.com` *(Identical!)* |
+
+---
+
+### Administrator Setup: Adding Provider 2 to the Same Pool
+
+Your GCP administrator creates the second provider inside the existing workforce pool using `gcloud` or Terraform:
+
+```bash
+gcloud iam workforce-pools providers create-oidc ARIA_PROVIDER_ID \
+    --workforce-pool="WORKFORCE_POOL_ID" \
+    --location="global" \
+    --display-name="ARIA Portal Provider" \
+    --description="Workforce provider for ARIA portal cross-application access" \
+    --issuer-uri="https://login.microsoftonline.com/TENANT_ID/v2.0" \
+    --client-id="ENTRA_APP_CLIENT_ID_2" \
+    --attribute-mapping="google.subject=assertion.email.lowerAscii(),google.display_name=assertion.name,google.groups=assertion.groups" \
+    --web-sso-response-type="code" \
+    --web-sso-assertion-claims-behavior="merge-user-info-over-id-token-claims"
+```
+
+---
+
+### Cross-Application Call Flow
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant App as Calling app backend (e.g. ARIA)
-    participant E as Microsoft Entra ID (shared tenant)
+    autonumber
+    participant U as End User
+    participant App as ARIA Backend
+    participant E as Microsoft Entra ID (Tenant)
     participant S as Google STS
     participant G as Gemini Enterprise API
 
-    U->>App: Signs into the app (normal OIDC, same Entra tenant)
-    App->>E: Auth code flow (app's own Entra app registration)
-    E-->>App: ID token (aud = app's own client ID)
-    Note over App: No extra Entra or Google prompt needed
-    App->>S: POST /v1/token (subject_token = that ID token,<br/>audience = pool/providers/APP_PROVIDER_ID)
-    S-->>App: GCP access_token (same principal as the user's<br/>existing Gemini Enterprise identity)
-    App->>G: GET .../assistants (Bearer + X-Goog-User-Project)
-    G-->>App: User's authorized Gemini Enterprise data
-    App-->>U: Rendered inline in the app's own UI
+    U->>App: Signs into ARIA Portal
+    App->>E: OIDC Auth Code Flow (App Client ID = ENTRA_APP_CLIENT_ID_2)
+    E-->>App: ID Token (aud = ENTRA_APP_CLIENT_ID_2, sub/email = user@example.com)
+    Note over App: Seamless — no second prompt or consent screen
+
+    App->>S: POST https://sts.googleapis.com/v1/token<br/>subject_token = ARIA ID Token<br/>audience = //iam.googleapis.com/.../workforcePools/WORKFORCE_POOL_ID/providers/ARIA_PROVIDER_ID
+    S-->>App: GCP Access Token (Principal: .../workforcePools/WORKFORCE_POOL_ID/subject/user@example.com)
+    Note over App: Backend caches token for ~1 hr lifetime
+
+    App->>G: GET https://discoveryengine.googleapis.com/v1alpha/.../assistants<br/>Authorization: Bearer <GCP Access Token><br/>X-Goog-User-Project: PROJECT_NUMBER
+    G-->>App: Gemini Enterprise data & search results
+    App-->>U: Rendered inline in ARIA Portal UI
 ```
 
-The calling app's backend should perform this exchange server-side, cache the resulting token for its ~1-hour lifetime per signed-in user, and refresh by repeating the exchange — all silent to the user for as long as their Entra ID session stays valid.
+### STS Call Example for Provider 2
 
-If the calling application can't get its own provider added to the pool (a different admin domain owns it), fall back to an Entra ID On-Behalf-Of token exchange to mint a token for the existing provider's audience before handing it to STS — same STS call, one extra Entra-side hop, still no user-facing prompt.
+```bash
+curl https://sts.googleapis.com/v1/token \
+    --data-urlencode "audience=//iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/providers/ARIA_PROVIDER_ID" \
+    --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+    --data-urlencode "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
+    --data-urlencode "scope=https://www.googleapis.com/auth/cloud-platform" \
+    --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+    --data-urlencode "subject_token=ARIA_ENTRA_ID_TOKEN" \
+    --data-urlencode "options={\"userProject\":\"WORKFORCE_POOL_USER_PROJECT\"}"
+```
 
+### Alternative: Entra ID On-Behalf-Of (OBO) Flow (If Provider 2 Cannot Be Added)
+
+If your organization's GCP policy prohibits creating a second provider in the workforce pool:
+1. The ARIA backend takes the user's incoming Entra ID token and invokes Entra ID's **On-Behalf-Of (OBO)** endpoint (`https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/token`).
+2. Entra ID mints a new token with `aud = ENTRA_APP_CLIENT_ID_1` (the primary Gemini Enterprise app registration).
+3. The ARIA backend exchanges this OBO token against `WORKFORCE_PROVIDER_ID_1` with Google STS. Still zero user-facing prompts.
 ## Ending a session
 
 There is no persistent Google-side session to revoke. Simply stop requesting new Entra ID ID tokens and let the last-issued Google Cloud access token expire (within `expires_in` seconds of the last exchange).
