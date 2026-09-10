@@ -121,6 +121,36 @@ curl -X GET \
 
 Substitute `PROJECT_NUMBER`, `LOCATION`, and `ENGINE_ID` with the values from [Prerequisites](#prerequisites-already-done-by-your-administrator). Any other Gemini Enterprise/Discovery Engine REST endpoint your Entra ID identity is authorized for follows the same pattern — same two headers, different URL and body.
 
+## Cross-Application Access (e.g. Embedding Gemini Enterprise Data in Another App)
+
+If a second application — say an internal portal called ARIA — is federated through the **same Microsoft Entra ID tenant** and needs to show a signed-in user's Gemini Enterprise data inline, the user should never see a second Google sign-in prompt. The recommended setup:
+
+- Your administrator creates a **second Workforce Identity Federation provider in the same workforce pool** used for Gemini Enterprise, with `--client-id` set to the calling application's own Entra ID app registration, and the **same `--attribute-mapping`** as the existing provider (e.g. both map `google.subject` from the same Entra claim, such as `assertion.oid`). Same pool + same mapping means the same human resolves to the same Google principal (`principal://iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/subject/...`) no matter which application's provider they came through — so IAM access already granted for Gemini Enterprise applies automatically, with no separate consent step.
+- The calling application's backend then reuses the ID token it already holds from its own normal Entra ID sign-in (no extra prompt) and exchanges it directly with STS, exactly like [Option B](#option-b-headless-token-exchange-scriptsautomation) above — just pointed at its own provider's resource name as the `audience`.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant App as Calling app backend (e.g. ARIA)
+    participant E as Microsoft Entra ID (shared tenant)
+    participant S as Google STS
+    participant G as Gemini Enterprise API
+
+    U->>App: Signs into the app (normal OIDC, same Entra tenant)
+    App->>E: Auth code flow (app's own Entra app registration)
+    E-->>App: ID token (aud = app's own client ID)
+    Note over App: No extra Entra or Google prompt needed
+    App->>S: POST /v1/token (subject_token = that ID token,<br/>audience = pool/providers/APP_PROVIDER_ID)
+    S-->>App: GCP access_token (same principal as the user's<br/>existing Gemini Enterprise identity)
+    App->>G: GET .../assistants (Bearer + X-Goog-User-Project)
+    G-->>App: User's authorized Gemini Enterprise data
+    App-->>U: Rendered inline in the app's own UI
+```
+
+The calling app's backend should perform this exchange server-side, cache the resulting token for its ~1-hour lifetime per signed-in user, and refresh by repeating the exchange — all silent to the user for as long as their Entra ID session stays valid.
+
+If the calling application can't get its own provider added to the pool (a different admin domain owns it), fall back to an Entra ID On-Behalf-Of token exchange to mint a token for the existing provider's audience before handing it to STS — same STS call, one extra Entra-side hop, still no user-facing prompt.
+
 ## Ending your session
 
 - Interactive (`gcloud auth login`): `gcloud auth revoke` to sign out; `gcloud auth list` to see active sessions.

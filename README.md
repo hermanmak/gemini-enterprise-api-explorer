@@ -69,7 +69,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credential-config.json
 
 No code changes are required — the backend detects the credential kind automatically, and the sidebar's live auth status badge labels it "Workforce Identity Federation" or "Workload Identity Federation" once configured.
 
-> **Note:** The steps above are for *this app's own backend* (operator-side ADC). If you're an end user who wants to call the Gemini Enterprise API directly with your own Entra ID identity via Workforce Identity Federation, see [Getting a Gemini Enterprise API token via Entra ID + WIF](docs/entra-id-wif-token-guide.md).
+> **Note:** The steps above are for *this app's own backend* (operator-side ADC). If you're an end user who wants to call the Gemini Enterprise API directly with your own Entra ID identity via Workforce Identity Federation — including embedding it in another app on the same Entra tenant — see [Authentication](docs/AUTHENTICATION.md).
 
 > **Important:** Ensure you have the necessary permissions in your Google Cloud project to access Discovery Engine APIs and NotebookLM Enterprise.
 
@@ -106,7 +106,7 @@ The script will:
 ## 📚 Documentation
 
 - **[NotebookLM Guide](docs/NOTEBOOKLM.md)** - Complete NotebookLM features and API reference
-- **[Entra ID + WIF Token Guide](docs/entra-id-wif-token-guide.md)** - How an end user obtains a Gemini Enterprise API token via Workforce Identity Federation with Microsoft Entra ID
+- **[Authentication](docs/AUTHENTICATION.md)** - How an end user (or another app on the same Entra tenant) obtains a Gemini Enterprise API token via Workforce Identity Federation with Microsoft Entra ID
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture and development guide
 - **[API Reference](http://localhost:8000/docs)** - Interactive API docs (when backend is running)
 
