@@ -1,8 +1,8 @@
 # Getting a Gemini Enterprise API token via Workforce Identity Federation (Microsoft Entra ID)
 
-This guide is for an **end user** at a customer organization who wants to call the Gemini Enterprise (Discovery Engine) API directly — from a script, notebook, or their own client — using their existing Microsoft Entra ID corporate identity, authenticated through Google Cloud's Workforce Identity Federation (WIF).
+This guide is for an **end user or automation** at a customer organization who wants to call the Gemini Enterprise (Discovery Engine) API directly — from a script, service, or backend, with **no `gcloud` CLI or browser available** — using an existing Microsoft Entra ID corporate identity, authenticated through Google Cloud's Workforce Identity Federation (WIF).
 
-It covers **only how to obtain and use the token**. It does not cover setting up Workforce Identity Federation itself.
+It covers **only how to obtain and use the token**, entirely headlessly. It does not cover setting up Workforce Identity Federation itself.
 
 ## Prerequisites (already done by your administrator)
 
@@ -19,91 +19,43 @@ Before you can follow this guide, your GCP/IT administrator must have already:
 
 If any of these don't exist yet, this guide isn't for you — ask your administrator to complete Google's [Workforce Identity Federation setup for Microsoft Entra ID](https://cloud.google.com/iam/docs/workforce-sign-in-microsoft-entra-id) first.
 
-There are two ways to get a token: **interactively** (you have a browser) or **headlessly** (a script/service with no browser). Pick one.
+## Step 1: Get an Entra ID OIDC ID token
 
-## Option A: Interactive sign-in with the gcloud CLI
+Obtain an **Entra ID–issued OIDC ID token** using whatever non-interactive method your organization uses for this identity — for example, an Entra ID app registration's client-credentials flow, an on-behalf-of exchange, or a managed-identity-backed call. This step is entirely on the Entra ID side; Google is not involved yet. The result is a JWT (`id_token`).
 
-Use this if you're a person at a terminal.
+## Step 2: Exchange it for a Google Cloud access token
 
-1. [Install the gcloud CLI](https://cloud.google.com/sdk/docs/install) if you don't already have it.
+POST the Entra ID ID token to Google's Security Token Service (STS) to exchange it for a short-lived Google Cloud access token:
 
-2. Get a **login configuration file** for your pool/provider. Your administrator may hand you this file directly, or you can generate it yourself if you have read access to the provider resource:
+```bash
+curl https://sts.googleapis.com/v1/token \
+    --data-urlencode "audience=//iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/providers/WORKFORCE_PROVIDER_ID" \
+    --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+    --data-urlencode "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
+    --data-urlencode "scope=https://www.googleapis.com/auth/cloud-platform" \
+    --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+    --data-urlencode "subject_token=ENTRA_ID_OIDC_TOKEN" \
+    --data-urlencode "options={\"userProject\":\"WORKFORCE_POOL_USER_PROJECT\"}"
+```
 
-   ```bash
-   gcloud iam workforce-pools create-login-config \
-       locations/global/workforcePools/WORKFORCE_POOL_ID/providers/WORKFORCE_PROVIDER_ID \
-       --output-file=login-config.json
-   ```
+Replace `ENTRA_ID_OIDC_TOKEN` with the JWT from Step 1, and the other placeholders with the values from [Prerequisites](#prerequisites-already-done-by-your-administrator).
 
-   This file only contains public endpoint metadata (audience, auth URL, token URL) — no secrets.
+The response looks like:
 
-3. Sign in. Two variants, depending on what you need the token for:
+```json
+{
+  "access_token": "ya29.dr.AaT61Tc6Ntv1ktbGkaQ9U_MQfiQw...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
 
-   - **For `gcloud`/`gsutil`/`bq` commands** and to get a token via `gcloud auth print-access-token`:
+`access_token` is your Google Cloud bearer token, valid for `expires_in` seconds (typically one hour). When it expires, repeat Step 1 and Step 2 with a fresh Entra ID ID token — there is no `gcloud` session to refresh; every renewal is this same two-step exchange.
 
-     ```bash
-     gcloud auth login --login-config=login-config.json
-     ```
+## Step 3: Call the Gemini Enterprise API
 
-   - **For a local script or app that reads Application Default Credentials (ADC)** — for example, calling the Gemini Enterprise API with a Google Cloud client library:
-
-     ```bash
-     gcloud auth application-default login --login-config=login-config.json
-     ```
-
-   Either command opens a browser, redirects you to sign in with your Microsoft Entra ID account, and on success stores credentials locally. gcloud transparently exchanges your Entra ID sign-in for a Google Cloud access token via Security Token Service — you don't do the token exchange yourself.
-
-4. Retrieve the access token:
-
-   ```bash
-   # If you used `gcloud auth login`:
-   gcloud auth print-access-token
-
-   # If you used `gcloud auth application-default login`:
-   gcloud auth application-default print-access-token
-   ```
-
-   Each command prints a short-lived Google Cloud access token (an OAuth `Bearer` token). When it expires, gcloud automatically re-exchanges your still-valid Entra ID session for a new one on the next `print-access-token` call — you don't need to sign in again until your Entra ID session itself expires.
-
-5. Skip to [Calling the Gemini Enterprise API](#calling-the-gemini-enterprise-api).
-
-## Option B: Headless token exchange (scripts/automation)
-
-Use this if there's no browser available — for example, a CI job or scheduled script running under a service identity that authenticates to Entra ID directly (client-credentials flow, or whatever non-interactive Entra ID flow your administrator has configured for this purpose).
-
-1. Obtain an **Entra ID–issued OIDC ID token** using whatever non-interactive method your administrator set up for automation (e.g. an Entra ID app registration's client-credentials or on-behalf-of flow). This is outside Google's scope — it's a standard Entra ID token acquisition, and the result is a JWT.
-
-2. Exchange that ID token for a Google Cloud access token by calling Security Token Service directly:
-
-   ```bash
-   curl https://sts.googleapis.com/v1/token \
-       --data-urlencode "audience=//iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/providers/WORKFORCE_PROVIDER_ID" \
-       --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
-       --data-urlencode "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
-       --data-urlencode "scope=https://www.googleapis.com/auth/cloud-platform" \
-       --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
-       --data-urlencode "subject_token=ENTRA_ID_OIDC_TOKEN" \
-       --data-urlencode "options={\"userProject\":\"WORKFORCE_POOL_USER_PROJECT\"}"
-   ```
-
-   Replace `ENTRA_ID_OIDC_TOKEN` with the JWT from step 1, and the other placeholders with the values from [Prerequisites](#prerequisites-already-done-by-your-administrator).
-
-3. The response looks like:
-
-   ```json
-   {
-     "access_token": "ya29.dr.AaT61Tc6Ntv1ktbGkaQ9U_MQfiQw...",
-     "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
-     "token_type": "Bearer",
-     "expires_in": 3600
-   }
-   ```
-
-   `access_token` is your Google Cloud bearer token, valid for `expires_in` seconds (typically one hour). When it expires, repeat step 2 with a fresh Entra ID ID token from step 1.
-
-## Calling the Gemini Enterprise API
-
-Once you have an access token from either option above, call the Gemini Enterprise (Discovery Engine) API directly. Two headers are required:
+Call the Gemini Enterprise (Discovery Engine) API directly with the access token. Two headers are required:
 
 - `Authorization: Bearer <access_token>`
 - `X-Goog-User-Project: PROJECT_NUMBER` — **required explicitly.** A Workforce Identity Federation principal typically has no GCP project associated with its credentials (unlike a user or service-account identity), so the API call must specify the billing/quota project itself rather than relying on it being inferred from the token.
@@ -111,7 +63,7 @@ Once you have an access token from either option above, call the Gemini Enterpri
 Example — listing assistants for an engine:
 
 ```bash
-ACCESS_TOKEN="<token from Option A or B>"
+ACCESS_TOKEN="<access_token from Step 2>"
 
 curl -X GET \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
@@ -123,10 +75,10 @@ Substitute `PROJECT_NUMBER`, `LOCATION`, and `ENGINE_ID` with the values from [P
 
 ## Cross-Application Access (e.g. Embedding Gemini Enterprise Data in Another App)
 
-If a second application — say an internal portal called ARIA — is federated through the **same Microsoft Entra ID tenant** and needs to show a signed-in user's Gemini Enterprise data inline, the user should never see a second Google sign-in prompt. The recommended setup:
+If a second application — say an internal portal called ARIA — is federated through the **same Microsoft Entra ID tenant** and needs to show a signed-in user's Gemini Enterprise data inline, the user should never see a second sign-in prompt. The recommended setup:
 
 - Your administrator creates a **second Workforce Identity Federation provider in the same workforce pool** used for Gemini Enterprise, with `--client-id` set to the calling application's own Entra ID app registration, and the **same `--attribute-mapping`** as the existing provider (e.g. both map `google.subject` from the same Entra claim, such as `assertion.oid`). Same pool + same mapping means the same human resolves to the same Google principal (`principal://iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/subject/...`) no matter which application's provider they came through — so IAM access already granted for Gemini Enterprise applies automatically, with no separate consent step.
-- The calling application's backend then reuses the ID token it already holds from its own normal Entra ID sign-in (no extra prompt) and exchanges it directly with STS, exactly like [Option B](#option-b-headless-token-exchange-scriptsautomation) above — just pointed at its own provider's resource name as the `audience`.
+- The calling application's backend then reuses the ID token it already holds from its own normal Entra ID sign-in and runs [Step 2](#step-2-exchange-it-for-a-google-cloud-access-token) exactly as above — just pointed at its own provider's resource name as the `audience`.
 
 ```mermaid
 sequenceDiagram
@@ -151,14 +103,13 @@ The calling app's backend should perform this exchange server-side, cache the re
 
 If the calling application can't get its own provider added to the pool (a different admin domain owns it), fall back to an Entra ID On-Behalf-Of token exchange to mint a token for the existing provider's audience before handing it to STS — same STS call, one extra Entra-side hop, still no user-facing prompt.
 
-## Ending your session
+## Ending a session
 
-- Interactive (`gcloud auth login`): `gcloud auth revoke` to sign out; `gcloud auth list` to see active sessions.
-- Headless: simply stop requesting new Entra ID ID tokens; there is no persistent Google-side session to revoke beyond letting the last-issued access token expire.
+There is no persistent Google-side session to revoke. Simply stop requesting new Entra ID ID tokens and let the last-issued Google Cloud access token expire (within `expires_in` seconds of the last exchange).
 
 ## Further reading
 
-- [Obtain short-lived tokens for Workforce Identity Federation](https://cloud.google.com/iam/docs/workforce-obtaining-short-lived-credentials) (Google's canonical reference for the commands and REST calls above)
+- [Obtain short-lived tokens for Workforce Identity Federation](https://cloud.google.com/iam/docs/workforce-obtaining-short-lived-credentials) (Google's canonical reference for the STS REST call above)
 - [Configure Workforce Identity Federation with Microsoft Entra ID](https://cloud.google.com/iam/docs/workforce-sign-in-microsoft-entra-id) (administrator setup — not needed if your admin has already done this)
 </content>
-<parameter name="i">Writing the end-user Entra ID WIF token acquisition guide
+<parameter name="i">Simplifying AUTHENTICATION.md to headless-only flow
