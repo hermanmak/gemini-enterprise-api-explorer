@@ -83,8 +83,9 @@ Gemini Enterprise binds authentication at the **Workforce Pool level**, not the 
 
 Because IAM permissions and data store access attach to the **workforce pool subject principal**:
 
-$$\text{principal://iam.googleapis.com/locations/global/workforcePools/}\mathbf{WORKFORCE\_POOL\_ID}\text{/subject/}\mathbf{SUBJECT\_VALUE}$$
-
+```text
+principal://iam.googleapis.com/locations/global/workforcePools/WORKFORCE_POOL_ID/subject/SUBJECT_VALUE
+```
 You can add a second OIDC provider to the **same workforce pool**. As long as both providers map `google.subject` to the same claim (e.g. `assertion.email.lowerAscii()` or `assertion.oid`), any authenticated user resolves to the **exact same principal**, retaining all Gemini Enterprise IAM access automatically.
 
 | Layer | Gemini Enterprise Primary / Web App | Calling Application (e.g. ARIA Portal) |
