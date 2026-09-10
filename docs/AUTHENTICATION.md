@@ -155,6 +155,18 @@ curl https://sts.googleapis.com/v1/token \
     --data-urlencode "options={\"userProject\":\"WORKFORCE_POOL_USER_PROJECT\"}"
 ```
 
+### Security Note: How STS Verifies the Caller (Asymmetric Signature & JWKS)
+
+A common question is: *How does Google STS know the caller is genuinely that user without contacting Entra ID on every request?*
+
+1. **Cryptographic Signing (Entra ID)**: When the user signs in, Microsoft Entra ID digitally signs the ID token using its private signing key.
+2. **Public Key Discovery (JWKS)**: Google STS retrieves Entra ID's public keys from Microsoft's standard OIDC discovery endpoint (`https://login.microsoftonline.com/<TENANT_ID>/discovery/v2.0/keys`) and caches them.
+3. **Tamper-Proof Verification**: During token exchange, STS validates:
+   - **Signature**: Mathematically verified against Entra ID's cached public key (proving the token was genuinely minted by Microsoft and untampered).
+   - **Issuer (`iss`)**: Matches the provider's configured `--issuer-uri`.
+   - **Audience (`aud`)**: Matches the provider's configured `--client-id` (`ENTRA_APP_CLIENT_ID_2`).
+   - **Expiration (`exp`)**: Ensures the token is currently valid.
+4. **Safe Principal Resolution**: Once cryptographically verified, STS extracts the identity claim (e.g. `email` or `oid`) and maps it to the workforce pool principal.
 ### Alternative: Entra ID On-Behalf-Of (OBO) Flow (If Provider 2 Cannot Be Added)
 
 If your organization's GCP policy prohibits creating a second provider in the workforce pool:
